@@ -1,28 +1,31 @@
 package usecase
 
 import (
+	"errors"
 	"fmt"
+	"time"
+
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"tg_otp_auth_svc/internal/domain"
 	"tg_otp_auth_svc/pkg/logger"
-	"time"
 )
 
 // AuthUseCaseImpl - реализация AuthUseCase
 type AuthUseCaseImpl struct {
 	AuthRepo domain.AuthAttemptRepository
-}
-type AuthUseCase interface {
-	MarkExpiredAuthAttempts() error
+	UserRepo domain.UserRepository // ✅ Добавляем UserRepo
 }
 
 // Убедимся, что AuthUseCaseImpl реализует интерфейс
 var _ domain.AuthUseCase = (*AuthUseCaseImpl)(nil)
 
 // NewAuthUseCase создает новый экземпляр AuthUseCase
-func NewAuthUseCase(authRepo domain.AuthAttemptRepository) domain.AuthUseCase {
-	return &AuthUseCaseImpl{AuthRepo: authRepo}
+func NewAuthUseCase(authRepo domain.AuthAttemptRepository, userRepo domain.UserRepository) domain.AuthUseCase {
+	return &AuthUseCaseImpl{
+		AuthRepo: authRepo,
+		UserRepo: userRepo, // ✅ Передаем UserRepo
+	}
 }
 
 // CheckAuthLink проверяет статус авторизационной ссылки
@@ -81,8 +84,8 @@ func (u *AuthUseCaseImpl) StartAuthorization(tgID int64) (string, error) {
 	return newUUID, nil
 }
 
+// MarkExpiredAuthAttempts помечает истекшие попытки авторизации как TIMEOUT
 func (u *AuthUseCaseImpl) MarkExpiredAuthAttempts() error {
-	// Получаем все истекшие попытки авторизации
 	authAttempts, err := u.AuthRepo.GetExpiredAuthAttempts()
 	if err != nil {
 		logger.Logger.Error("Ошибка при получении истекших попыток авторизации", zap.Error(err))
@@ -94,12 +97,10 @@ func (u *AuthUseCaseImpl) MarkExpiredAuthAttempts() error {
 		return nil
 	}
 
-	// Логируем количество найденных записей
 	logger.Logger.Info("Обновление статусов для истекших попыток авторизации", zap.Int("количество", len(authAttempts)))
 
-	var updateErrors []error // Список ошибок при обновлении
+	var updateErrors []error
 
-	// Обновляем статус каждой попытки
 	for _, attempt := range authAttempts {
 		if err := u.AuthRepo.UpdateAuthAttemptStatus(attempt.ID, 2); err != nil {
 			logger.Logger.Error("Ошибка при обновлении статуса попытки авторизации",
@@ -108,7 +109,6 @@ func (u *AuthUseCaseImpl) MarkExpiredAuthAttempts() error {
 		}
 	}
 
-	// Если были ошибки обновления, логируем их
 	if len(updateErrors) > 0 {
 		logger.Logger.Error("Ошибки при обновлении статусов попыток авторизации", zap.Int("количество", len(updateErrors)))
 		return fmt.Errorf("ошибки обновления статусов: %d", len(updateErrors))
@@ -116,4 +116,23 @@ func (u *AuthUseCaseImpl) MarkExpiredAuthAttempts() error {
 
 	logger.Logger.Info("Успешно обновлены все истекшие попытки авторизации")
 	return nil
+}
+
+// ✅ Используем UserRepo вместо AuthRepo
+// GetUserByTgID - получает пользователя по Telegram ID
+func (u *AuthUseCaseImpl) GetUserByTgID(tgID int64) (*domain.User, error) {
+	return u.UserRepo.GetUserByChatID(tgID) // ✅ Меняем на UserRepo
+}
+
+// CreateUser - создает нового пользователя
+func (u *AuthUseCaseImpl) CreateUser(user *domain.User) error {
+	return u.UserRepo.CreateUser(user) // ✅ Меняем на UserRepo
+}
+
+// UpdateUserLanguage - обновляет язык пользователя
+func (u *AuthUseCaseImpl) UpdateUserLanguage(tgID int64, lang string) error {
+	if lang != "ru" && lang != "en" {
+		return errors.New("неподдерживаемый язык")
+	}
+	return u.UserRepo.UpdateUserLanguage(tgID, lang) // ✅ Меняем на UserRepo
 }

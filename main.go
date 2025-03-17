@@ -21,9 +21,18 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	pb "tg_otp_auth_svc/proto"
+
+	"github.com/joho/godotenv"
+	"tg_otp_auth_svc/internal/delivery/telegram" // Добавляем поддержку Telegram-бота
 )
 
 func main() {
+	// Загружаем .env файл (если он есть)
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("⚠️ Не удалось загрузить .env файл, используются переменные окружения")
+	}
+
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Ошибка загрузки конфига: %v", err)
@@ -36,8 +45,29 @@ func main() {
 	defer database.CloseDB()
 
 	authRepo := &repository.PostgresAuthAttemptRepository{}
-	authUC := usecase.NewAuthUseCase(authRepo)
+	userRepo := &repository.PostgresUserRepository{}     // ✅ Добавляем UserRepo
+	authUC := usecase.NewAuthUseCase(authRepo, userRepo) // ✅ Теперь передаем оба аргумента
+
 	authHandler := grpcHandler.NewAuthHandler(authUC)
+
+	// Получаем токен Telegram-бота
+	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	if botToken == "" {
+		log.Fatal("❌ Ошибка: переменная TELEGRAM_BOT_TOKEN не задана!")
+	}
+
+	authUCImpl, ok := authUC.(*usecase.AuthUseCaseImpl)
+	if !ok {
+		log.Fatal("Ошибка приведения authUC к *usecase.AuthUseCaseImpl")
+	}
+
+	// Создаём и запускаем Telegram-бота
+	tgHandler, err := telegram.NewTelegramHandler(authUCImpl, botToken)
+	if err != nil {
+		log.Fatalf("Ошибка запуска Telegram-бота: %v", err)
+	}
+
+	go tgHandler.Run()
 
 	// Запускаем gRPC-сервер
 	go startGRPCServer(cfg, authHandler)

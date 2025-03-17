@@ -140,3 +140,30 @@ func (r *PostgresAuthAttemptRepository) GetPendingAuthAttemptByTgID(tgID int64) 
 
 	return &attempt, nil
 }
+
+// GetUserByTgID - получает пользователя по Telegram ID
+func (r *PostgresAuthAttemptRepository) GetUserByTgID(tgID int64) (*domain.User, error) {
+	var user domain.User
+	err := database.DB.QueryRow(context.Background(),
+		"SELECT id, username, tg_id, full_name, locale FROM user.profile WHERE tg_id=$1", tgID).
+		Scan(&user.ID, &user.Username, &user.ChatID, &user.FullName, &user.Locale)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// CreateUser - создает нового пользователя
+func (r *PostgresAuthAttemptRepository) CreateUser(user *domain.User) error {
+	_, err := database.DB.Exec(context.Background(),
+		"INSERT INTO user.profile (username, tg_id, full_name, locale) VALUES ($1, $2, $3, $4)",
+		user.Username, user.ChatID, user.FullName, user.Locale)
+	return err
+}
+
+// UpdateUserLanguage - обновляет язык пользователя
+func (r *PostgresAuthAttemptRepository) UpdateUserLanguage(tgID int64, lang string) error {
+	_, err := database.DB.Exec(context.Background(),
+		"UPDATE user.profile SET locale=$1 WHERE tg_id=$2", lang, tgID)
+	return err
+}

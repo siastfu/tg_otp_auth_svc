@@ -11,5 +11,8 @@ type AuthUseCase interface {
 	CheckAuthLink(uuid string) (*AuthAttempt, error)
 	StartAuthorization(tgID int64) (string, error)
 	UpdateAuthAttempt(attempt *AuthAttempt) error
-	MarkExpiredAuthAttempts() error // Добавили этот метод
+	MarkExpiredAuthAttempts() error
+	GetUserByTgID(tgID int64) (*User, error)
+	CreateUser(user *User) error
+	UpdateUserLanguage(tgID int64, lang string) error // Добавили этот метод
 }
