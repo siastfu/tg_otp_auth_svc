@@ -14,6 +14,8 @@ type AuthAttemptRepository interface {
 	GetPendingAuthAttemptByTgID(tgID int64) (*AuthAttempt, error) // Новый метод
 	CreateAuthAttempt(attempt *AuthAttempt) error
 	UpdateAuthAttempt(attempt *AuthAttempt) error
+	GetExpiredAuthAttempts() ([]AuthAttempt, error)
+	UpdateAuthAttemptStatus(authID string, statusID int) error
 }
 
 // AuthAttemptStatusRepository - интерфейс для работы со статусами авторизации

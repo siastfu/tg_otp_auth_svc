@@ -1,4 +1,4 @@
-package delivery
+package grpc
 
 import (
 	"context"
@@ -11,8 +11,12 @@ import (
 
 // AuthHandler - структура хендлера gRPC
 type AuthHandler struct {
-	AuthUC domain.AuthUseCase
+	pb.UnimplementedAuthServiceServer // Добавляем это поле
+	AuthUC                            domain.AuthUseCase
 }
+
+// Убеждаемся, что AuthHandler реализует интерфейс pb.AuthServiceServer
+var _ pb.AuthServiceServer = (*AuthHandler)(nil)
 
 // NewAuthHandler - создаёт новый экземпляр AuthHandler
 func NewAuthHandler(authUC domain.AuthUseCase) *AuthHandler {

@@ -40,7 +40,7 @@ func (r *PostgresUserRepository) UpdateUserLanguage(chatID int64, locale string)
 
 	_, err := database.DB.Exec(context.Background(),
 		"UPDATE \"user\".\"profile\" SET locale=$1, updated_at=NOW() WHERE chat_id=$2",
-		locale, chatID) // Передаем аргументы
+		locale, chatID)
 
 	if err != nil {
 		fmt.Println("❌ DEBUG: Ошибка SQL-запроса в UpdateUserLanguage:", err)
@@ -57,6 +57,9 @@ func (r *PostgresAuthAttemptRepository) GetAuthAttemptByID(id string) (*domain.A
 		"SELECT id, tg_id, status_id, created_at, expired_at, succeeded_at FROM auth.attempt WHERE id=$1", id).
 		Scan(&attempt.ID, &attempt.TgID, &attempt.StatusID, &attempt.CreatedAt, &attempt.ExpiredAt, &attempt.SucceededAt)
 	if err != nil {
+		if err.Error() == "no rows in result set" {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &attempt, nil
@@ -73,6 +76,38 @@ func (r *PostgresAuthAttemptRepository) UpdateAuthAttempt(attempt *domain.AuthAt
 	_, err := database.DB.Exec(context.Background(),
 		"UPDATE auth.attempt SET status_id=$1, succeeded_at=$2 WHERE id=$3",
 		attempt.StatusID, attempt.SucceededAt, attempt.ID)
+	return err
+}
+
+// ✅ Новый метод: Получение истекших попыток авторизации
+func (r *PostgresAuthAttemptRepository) GetExpiredAuthAttempts() ([]domain.AuthAttempt, error) {
+	rows, err := database.DB.Query(context.Background(),
+		`SELECT id, tg_id, status_id, created_at, expired_at, succeeded_at 
+		 FROM auth.attempt 
+		 WHERE status_id = 1 AND expired_at <= NOW()`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var attempts []domain.AuthAttempt
+	for rows.Next() {
+		var attempt domain.AuthAttempt
+		err := rows.Scan(&attempt.ID, &attempt.TgID, &attempt.StatusID, &attempt.CreatedAt, &attempt.ExpiredAt, &attempt.SucceededAt)
+		if err != nil {
+			return nil, err
+		}
+		attempts = append(attempts, attempt)
+	}
+
+	return attempts, nil
+}
+
+// ✅ Новый метод: Обновление статуса попытки авторизации
+func (r *PostgresAuthAttemptRepository) UpdateAuthAttemptStatus(authID string, statusID int) error {
+	_, err := database.DB.Exec(context.Background(),
+		"UPDATE auth.attempt SET status_id = $1 WHERE id = $2",
+		statusID, authID)
 	return err
 }
 
