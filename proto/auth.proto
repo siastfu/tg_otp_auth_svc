@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "tg_otp_auth_svc/proto";
+
+service AuthService {
+  rpc CheckAuthLink (CheckAuthRequest) returns (CheckAuthResponse);
+}
+
+message CheckAuthRequest {
+  string uuid = 1;
+}
+
+message CheckAuthResponse {
+  int64 tg_id = 1;
+  bool success = 2;
+}
