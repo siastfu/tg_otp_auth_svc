@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"errors"
+	"github.com/google/uuid"
 	"testing"
 	"time"
 
@@ -15,9 +16,15 @@ type MockAuthRepo struct {
 	mock.Mock
 }
 
-func (m *MockAuthRepo) GetAuthAttemptByID(id string) (*domain.AuthAttempt, error) {
+func (m *MockAuthRepo) GetAuthAttemptByID(id uuid.UUID) (*domain.AuthAttempt, error) {
 	args := m.Called(id)
-	return args.Get(0).(*domain.AuthAttempt), args.Error(1)
+
+	// Проверяем, что значение не nil
+	if attempt, ok := args.Get(0).(*domain.AuthAttempt); ok {
+		return attempt, args.Error(1)
+	}
+
+	return nil, args.Error(1) // ✅ Если nil, возвращаем nil без panic
 }
 
 func (m *MockAuthRepo) GetPendingAuthAttemptByTgID(tgID int64) (*domain.AuthAttempt, error) {

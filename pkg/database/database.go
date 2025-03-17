@@ -33,9 +33,8 @@ func ConnectDB(cfg *config.Config) {
 
 	// Устанавливаем параметры пула соединений
 	poolConfig.MaxConnLifetime = 5 * time.Minute
-	poolConfig.MaxConns = 10 // Максимальное количество соединений
-	poolConfig.MinConns = 2  // Минимальное количество соединений
-
+	poolConfig.MaxConns = int32(cfg.Database.MaxConnections) // ✅ Теперь берём `max_connections` из конфига
+	poolConfig.MinConns = 2
 	// Подключаемся к БД
 	DB, err = pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {

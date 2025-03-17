@@ -15,12 +15,13 @@ type Config struct {
 	} `mapstructure:"app"`
 
 	Database struct {
-		Host     string `mapstructure:"host"`
-		Port     int    `mapstructure:"port"`
-		User     string `mapstructure:"user"`
-		Password string `mapstructure:"password"`
-		DBName   string `mapstructure:"dbname"`
-		SSLMode  string `mapstructure:"sslmode"`
+		Host           string `mapstructure:"host"`
+		Port           int    `mapstructure:"port"`
+		User           string `mapstructure:"user"`
+		Password       string `mapstructure:"password"`
+		DBName         string `mapstructure:"dbname"`
+		SSLMode        string `mapstructure:"sslmode"`
+		MaxConnections int    `mapstructure:"max_connections"` // ✅ Теперь загружаем `max_connections`
 	} `mapstructure:"database"`
 
 	GRPC struct {

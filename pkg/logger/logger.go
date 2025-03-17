@@ -42,5 +42,7 @@ func InitLogger(env string) {
 
 // Sync закрывает логгер перед завершением работы
 func Sync() {
-	_ = Logger.Sync()
+	if Logger != nil {
+		_ = Logger.Sync()
+	}
 }

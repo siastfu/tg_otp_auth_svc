@@ -3,8 +3,10 @@ package repository
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"tg_otp_auth_svc/internal/domain"
 	"tg_otp_auth_svc/pkg/database"
+	"github.com/jackc/pgx/v5"
 )
 
 // PostgresUserRepository - реализация UserRepository
@@ -22,10 +24,19 @@ func (r *PostgresUserRepository) GetUserByChatID(chatID int64) (*domain.User, er
 }
 
 func (r *PostgresUserRepository) CreateUser(user *domain.User) error {
-	_, err := database.DB.Exec(context.Background(),
-		"INSERT INTO \"user\".\"profile\" (username, chat_id, full_name, phone_number, locale, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-		user.Username, user.ChatID, user.FullName, user.PhoneNumber, user.Locale, user.CreatedAt, user.UpdatedAt)
-	return err
+	err := database.DB.QueryRow(context.Background(),
+		"INSERT INTO user.profile (username, chat_id, full_name, phone_number, locale, created_at, updated_at) "+
+			"VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+		user.Username, user.ChatID, user.FullName, user.PhoneNumber, user.Locale, user.CreatedAt, user.UpdatedAt).
+		Scan(&user.ID) // ✅ Теперь получаем id нового пользователя
+
+	if err != nil {
+		logger.Logger.Error("Ошибка при создании пользователя", zap.Error(err))
+		return err
+	}
+
+	logger.Logger.Info("Пользователь успешно создан", zap.Int("id", user.ID))
+	return nil
 }
 
 func (r *PostgresUserRepository) UpdateUser(user *domain.User) error {
@@ -51,18 +62,24 @@ func (r *PostgresUserRepository) UpdateUserLanguage(chatID int64, locale string)
 // PostgresAuthAttemptRepository - реализация AuthAttemptRepository
 type PostgresAuthAttemptRepository struct{}
 
-func (r *PostgresAuthAttemptRepository) GetAuthAttemptByID(id string) (*domain.AuthAttempt, error) {
-	var attempt domain.AuthAttempt
+var attempt domain.AuthAttempt
+
+
+func (r *PostgresAuthAttemptRepository) GetAuthAttemptByID(id uuid.UUID) (*domain.AuthAttempt, error) {
+	var authAttempt domain.AuthAttempt
 	err := database.DB.QueryRow(context.Background(),
 		"SELECT id, tg_id, status_id, created_at, expired_at, succeeded_at FROM auth.attempt WHERE id=$1", id).
-		Scan(&attempt.ID, &attempt.TgID, &attempt.StatusID, &attempt.CreatedAt, &attempt.ExpiredAt, &attempt.SucceededAt)
+		Scan(&authAttempt.ID, &authAttempt.TgID, &authAttempt.StatusID, &authAttempt.CreatedAt, &authAttempt.ExpiredAt, &authAttempt.SucceededAt)
+
 	if err != nil {
-		if err.Error() == "no rows in result set" {
-			return nil, nil
+		if err == pgx.ErrNoRows {
+			logger.Logger.Warn("Попытка авторизации не найдена", zap.String("uuid", id.String()))
+			return nil, nil // ✅ Теперь возвращаем `nil`, а не ошибку
 		}
 		return nil, err
 	}
-	return &attempt, nil
+
+	return &authAttempt, nil
 }
 
 func (r *PostgresAuthAttemptRepository) CreateAuthAttempt(attempt *domain.AuthAttempt) error {
@@ -103,12 +120,18 @@ func (r *PostgresAuthAttemptRepository) GetExpiredAuthAttempts() ([]domain.AuthA
 	return attempts, nil
 }
 
-// ✅ Новый метод: Обновление статуса попытки авторизации
-func (r *PostgresAuthAttemptRepository) UpdateAuthAttemptStatus(authID string, statusID int) error {
+func (r *PostgresAuthAttemptRepository) UpdateAuthAttemptStatus(authID uuid.UUID, statusID int) error {
 	_, err := database.DB.Exec(context.Background(),
-		"UPDATE auth.attempt SET status_id = $1 WHERE id = $2",
+		"UPDATE auth.attempt SET status_id=$1 WHERE id=$2",
 		statusID, authID)
-	return err
+
+	if err != nil {
+		logger.Logger.Error("Ошибка при обновлении статуса авторизации", zap.Error(err), zap.String("authID", authID.String()))
+		return err
+	}
+
+	logger.Logger.Info("Статус авторизации обновлён", zap.String("authID", authID.String()), zap.Int("statusID", statusID))
+	return nil
 }
 
 // PostgresAuthAttemptStatusRepository - реализация AuthAttemptStatusRepository
@@ -166,4 +189,20 @@ func (r *PostgresAuthAttemptRepository) UpdateUserLanguage(tgID int64, lang stri
 	_, err := database.DB.Exec(context.Background(),
 		"UPDATE user.profile SET locale=$1 WHERE tg_id=$2", lang, tgID)
 	return err
+}
+import "github.com/jackc/pgx/v5"
+
+func (r *PostgresAuthAttemptRepository) DeleteExpiredAuthAttempts() error {
+	query := "DELETE FROM auth.attempt WHERE status_id = 2 AND expired_at < NOW()"
+
+	result, err := database.DB.Exec(context.Background(), query)
+	if err != nil {
+		logger.Logger.Error("Ошибка при удалении истёкших попыток авторизации", zap.Error(err))
+		return err
+	}
+
+	rowsDeleted := result.RowsAffected()
+	logger.Logger.Info("Удалено истёкших попыток авторизации", zap.Int64("rows", rowsDeleted))
+
+	return nil
 }

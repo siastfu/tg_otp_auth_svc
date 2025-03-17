@@ -1,5 +1,7 @@
 package domain
 
+import "github.com/google/uuid"
+
 // UserRepository - интерфейс для работы с пользователями
 type UserRepository interface {
 	GetUserByChatID(chatID int64) (*User, error)
@@ -10,12 +12,13 @@ type UserRepository interface {
 
 // AuthAttemptRepository - интерфейс для работы с попытками авторизации
 type AuthAttemptRepository interface {
-	GetAuthAttemptByID(id string) (*AuthAttempt, error)
 	GetPendingAuthAttemptByTgID(tgID int64) (*AuthAttempt, error) // Новый метод
 	CreateAuthAttempt(attempt *AuthAttempt) error
 	UpdateAuthAttempt(attempt *AuthAttempt) error
 	GetExpiredAuthAttempts() ([]AuthAttempt, error)
-	UpdateAuthAttemptStatus(authID string, statusID int) error
+	GetAuthAttemptByID(id uuid.UUID) (*AuthAttempt, error)
+	UpdateAuthAttemptStatus(authID uuid.UUID, statusID int) error
+	DeleteExpiredAuthAttempts() error
 }
 
 // AuthAttemptStatusRepository - интерфейс для работы со статусами авторизации

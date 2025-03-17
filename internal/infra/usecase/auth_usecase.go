@@ -24,13 +24,14 @@ var _ domain.AuthUseCase = (*AuthUseCaseImpl)(nil)
 func NewAuthUseCase(authRepo domain.AuthAttemptRepository, userRepo domain.UserRepository) domain.AuthUseCase {
 	return &AuthUseCaseImpl{
 		AuthRepo: authRepo,
-		UserRepo: userRepo, // ✅ Передаем UserRepo
+		UserRepo: userRepo, // ✅ Передаём UserRepo в конструктор
 	}
 }
 
-// CheckAuthLink проверяет статус авторизационной ссылки
-func (u *AuthUseCaseImpl) CheckAuthLink(uuid string) (*domain.AuthAttempt, error) {
-	authAttempt, err := u.AuthRepo.GetAuthAttemptByID(uuid)
+import "go.uber.org/zap"
+
+func (u *AuthUseCaseImpl) CheckAuthLink(id uuid.UUID) (*domain.AuthAttempt, error) {
+	authAttempt, err := u.AuthRepo.GetAuthAttemptByID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -46,6 +47,22 @@ func (u *AuthUseCaseImpl) CheckAuthLink(uuid string) (*domain.AuthAttempt, error
 	if time.Now().After(authAttempt.ExpiredAt) {
 		return nil, domain.ErrAuthLinkExpired
 	}
+
+	// Обновляем статус авторизации в БД
+	authAttempt.StatusID = 3 // SUCCESS
+	now := time.Now()
+	authAttempt.SucceededAt = &now
+
+	err = u.AuthRepo.UpdateAuthAttempt(authAttempt)
+	if err != nil {
+		logger.Logger.Error("Ошибка при обновлении статуса авторизации", zap.Error(err))
+		return nil, domain.ErrInternalServerError
+	}
+
+	// ✅ Логируем успешную авторизацию
+	logger.Logger.Info("Авторизация успешна",
+		zap.String("uuid", id.String()),
+		zap.Time("succeeded_at", now))
 
 	return authAttempt, nil
 }

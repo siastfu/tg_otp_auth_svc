@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -62,7 +63,7 @@ func main() {
 	}
 
 	// Создаём и запускаем Telegram-бота
-	tgHandler, err := telegram.NewTelegramHandler(authUCImpl, botToken)
+	tgHandler, err := telegram.NewTelegramHandler(authUC, botToken) // ✅ Передаём интерфейс
 	if err != nil {
 		log.Fatalf("Ошибка запуска Telegram-бота: %v", err)
 	}
@@ -81,16 +82,27 @@ func main() {
 	WaitForShutdown()
 }
 
-// startWorker запускает фоновую задачу для обработки истекших ссылок
-func startWorker(authUC domain.AuthUseCase) {
+func startWorker(ctx context.Context, authUC domain.AuthUseCase, authRepo domain.AuthAttemptRepository) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		fmt.Println("🔄 Проверяем истекшие ссылки...")
-		err := authUC.MarkExpiredAuthAttempts()
-		if err != nil {
-			logger.Logger.Error("Ошибка при обработке истекших ссылок", zap.Error(err))
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("🛑 Воркер остановлен")
+			return
+		case <-ticker.C:
+			fmt.Println("🔄 Проверяем истёкшие ссылки...")
+			err := authUC.MarkExpiredAuthAttempts()
+			if err != nil {
+				logger.Logger.Error("Ошибка при обработке истёкших ссылок", zap.Error(err))
+			}
+
+			// Удаляем истёкшие попытки авторизации
+			err = authRepo.DeleteExpiredAuthAttempts()
+			if err != nil {
+				logger.Logger.Error("Ошибка при удалении истёкших записей", zap.Error(err))
+			}
 		}
 	}
 }

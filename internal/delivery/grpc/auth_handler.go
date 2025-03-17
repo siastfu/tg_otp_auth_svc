@@ -3,7 +3,11 @@ package grpc
 import (
 	"context"
 	"errors"
-	"time"
+	"github.com/google/uuid"
+	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"tg_otp_auth_svc/pkg/logger"
 
 	"tg_otp_auth_svc/internal/domain"
 	pb "tg_otp_auth_svc/proto" // gRPC-протофайл
@@ -24,34 +28,31 @@ func NewAuthHandler(authUC domain.AuthUseCase) *AuthHandler {
 }
 
 // CheckAuthLink - обработка gRPC-запроса на проверку ссылки
+
 func (h *AuthHandler) CheckAuthLink(ctx context.Context, req *pb.CheckAuthRequest) (*pb.CheckAuthResponse, error) {
-	authAttempt, err := h.AuthUC.CheckAuthLink(req.Uuid)
+	id, err := uuid.Parse(req.Uuid)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid UUID format")
+	}
+
+	authAttempt, err := h.AuthUC.CheckAuthLink(id)
 	if err != nil {
 		if errors.Is(err, domain.ErrAuthAttemptNotFound) {
-			return nil, errors.New("auth attempt not found")
+			return nil, status.Errorf(codes.NotFound, "auth attempt not found")
 		}
 		if errors.Is(err, domain.ErrAuthAttemptNotPending) {
-			return nil, errors.New("auth attempt is not pending")
+			return nil, status.Errorf(codes.FailedPrecondition, "auth attempt is not pending")
 		}
 		if errors.Is(err, domain.ErrAuthLinkExpired) {
-			return nil, errors.New("auth link expired")
+			return nil, status.Errorf(codes.DeadlineExceeded, "auth link expired")
 		}
-		return nil, err
+
+		logger.Logger.Error("Ошибка в CheckAuthLink", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "internal server error")
 	}
 
-	// Обновляем статус авторизации в БД
-	authAttempt.StatusID = 3 // SUCCESS
-	now := time.Now()
-	authAttempt.SucceededAt = &now
-
-	err = h.AuthUC.UpdateAuthAttempt(authAttempt)
-	if err != nil {
-		return nil, err
-	}
-
-	// Возвращаем успешный ответ
 	return &pb.CheckAuthResponse{
-		TgId:    authAttempt.TgID,
 		Success: true,
+		Message: "Authorization successful",
 	}, nil
 }

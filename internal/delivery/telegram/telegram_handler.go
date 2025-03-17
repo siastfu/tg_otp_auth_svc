@@ -3,9 +3,8 @@ package telegram
 import (
 	"fmt"
 	"log"
-	"tg_otp_auth_svc/internal/infra/usecase"
 	"time"
-
+	"go.uber.org/zap"
 	"gopkg.in/telebot.v3"
 	"tg_otp_auth_svc/internal/domain"
 )
@@ -13,11 +12,11 @@ import (
 // TelegramHandler - структура для работы с Telegram-ботом
 type TelegramHandler struct {
 	Bot    *telebot.Bot
-	AuthUC domain.AuthUseCase
+	AuthUC domain.AuthUseCase // ✅ Теперь это интерфейс
 }
 
 // NewTelegramHandler - создание нового Telegram-хендлера
-func NewTelegramHandler(authUC *usecase.AuthUseCaseImpl, botToken string) (*TelegramHandler, error) {
+func NewTelegramHandler(authUC domain.AuthUseCase, botToken string) (*TelegramHandler, error) {
 	pref := telebot.Settings{
 		Token:  botToken,
 		Poller: &telebot.LongPoller{Timeout: 10 * time.Second},
@@ -41,16 +40,24 @@ func NewTelegramHandler(authUC *usecase.AuthUseCaseImpl, botToken string) (*Tele
 	return handler, nil
 }
 
-// registerHandlers - регистрация команд бота
+import "go.uber.org/zap"
+
 func (h *TelegramHandler) registerHandlers() {
-	h.Bot.Handle(&telebot.Command{Text: "start"}, h.handleStart)
-	h.Bot.Handle(&telebot.Callback{Unique: "auth"}, h.handleAuth)
-	h.Bot.Handle(&telebot.Callback{Unique: "lang_ru"}, func(c telebot.Context) error {
+	if err := h.Bot.Handle(&telebot.Command{Text: "start"}, h.handleStart); err != nil {
+		logger.Logger.Error("Ошибка при регистрации команды /start", zap.Error(err))
+	}
+
+	if err := h.Bot.Handle(&telebot.Callback{Unique: "auth"}, h.handleAuth); err != nil {
+		logger.Logger.Error("Ошибка при регистрации кнопки auth", zap.Error(err))
+	}
+
+	if err := h.Bot.Handle(&telebot.Callback{Unique: "lang_ru"}, func(c telebot.Context) error {
 		return h.updateUserLanguage(c, "ru")
-	})
-	h.Bot.Handle(&telebot.Callback{Unique: "lang_en"}, func(c telebot.Context) error {
-		return h.updateUserLanguage(c, "en")
-	})
+	}); err != nil {
+		logger.Logger.Error("Ошибка при регистрации кнопки lang_ru", zap.Error(err))
+	}
+
+	logger.Logger.Info("✅ Все обработчики команд успешно зарегистрированы")
 }
 
 // handleStart - обработчик команды /start

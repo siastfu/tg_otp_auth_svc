@@ -19,10 +19,12 @@ func NewUserUseCase(userRepo domain.UserRepository) domain.UserUseCase {
 	return &UserUseCaseImpl{UserRepo: userRepo}
 }
 
-// HandleUserEntry обрабатывает вход пользователя в бота
+import "go.uber.org/zap"
+
 func (u *UserUseCaseImpl) HandleUserEntry(chatID int64, username, fullName, phoneNumber string) (*domain.User, error) {
 	existingUser, err := u.UserRepo.GetUserByChatID(chatID)
 	if err != nil {
+		logger.Logger.Error("Ошибка при получении пользователя", zap.Int64("chat_id", chatID), zap.Error(err))
 		return nil, err
 	}
 
@@ -36,6 +38,7 @@ func (u *UserUseCaseImpl) HandleUserEntry(chatID int64, username, fullName, phon
 
 		err = u.UserRepo.UpdateUser(existingUser)
 		if err != nil {
+			logger.Logger.Error("Ошибка при обновлении пользователя", zap.Int64("chat_id", chatID), zap.Error(err))
 			return nil, err
 		}
 
@@ -54,9 +57,11 @@ func (u *UserUseCaseImpl) HandleUserEntry(chatID int64, username, fullName, phon
 
 	err = u.UserRepo.CreateUser(newUser)
 	if err != nil {
+		logger.Logger.Error("Ошибка при создании пользователя", zap.Int64("chat_id", chatID), zap.Error(err))
 		return nil, err
 	}
 
+	logger.Logger.Info("Пользователь успешно зарегистрирован", zap.Int64("chat_id", chatID))
 	return newUser, nil
 }
 
